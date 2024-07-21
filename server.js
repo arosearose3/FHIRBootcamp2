@@ -3,6 +3,7 @@ import cors from 'cors';
 import axios from 'axios';
 import crypto from 'crypto';  
 import session from 'express-session';  
+import fhir from 'fhir.js';
 
 const app = express();
 const port = 3000;
@@ -203,49 +204,83 @@ app.post('/auth/logout', (req, res) => {
 });
 
 
+
+function createFhirClient(accessToken) {
+  return fhir({
+    baseUrl: EPIC_FHIR_BASE_URL,
+    auth: {
+      bearer: accessToken
+    }
+  });
+}
+
+
+
 app.get('/api/medications', async (req, res) => {
-  if (!req.session || !req.session.tokens || !req.session.tokens.access_token) {
+  if (!req.session?.tokens?.access_token) {
     console.log('No valid session or access token found');
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
   try {
-
-    console.log('Fetching medications...');
-    console.log('path:',`${EPIC_FHIR_BASE_URL}/MedicationStatement?patient=${req.session.tokens.patient}&status=active,completed`);
-    const response = await axios.get<Bundle<MedicationRequest>>(`${EPIC_FHIR_BASE_URL}/MedicationRequest/${req.session.tokens.patient}`, {
-      headers: {
-        'Authorization': `Bearer ${req.session.tokens.access_token}`,
-        'Accept': 'application/json'
-      },
-      params: {
-    //    patient: req.session.tokens.patient,
-    //    _sort: '-effectiveDateTime',
-    //    _count: 100 // Adjust as needed
+    const client = createFhirClient(req.session.tokens.access_token);
+    const response = await client.search({
+      type: 'MedicationRequest',
+      query: {
+        patient: req.session.tokens.patient,
+        _sort: '-date',
+        _count: 100,
+        status: 'active'
       }
     });
 
-    const medications = response.data.entry.map(entry => {
-      const resource = entry.resource;
-      return {
-        name: resource.medicationCodeableConcept?.text || 'Unknown Medication',
-        dosage: resource.dosage?.[0]?.text || 'Dosage not specified',
-        status: resource.status,
-        effectiveDateTime: resource.effectiveDateTime || resource.effectivePeriod?.start
-      };
-    });
-
-    res.json(medications);
+    if (response.data?.resourceType === 'Bundle') {
+      const medications = response.data.entry
+        .filter(entry => entry.resource.resourceType === 'MedicationRequest')
+        .map(entry => {
+          const resource = entry.resource;
+        
+          return {
+            id: resource.id,
+            medication: resource.medicationReference?.display || 'Unknown Medication',
+            status: resource.status,
+            intent: resource.intent,
+            category: resource.category?.[0]?.coding?.[0]?.display || 'Uncategorized',
+            authoredOn: resource.authoredOn,
+            requester: resource.requester?.display || 'Unknown',
+            dosageInstructions: resource.dosageInstruction?.map(instruction => ({
+              timing: instruction.timing?.code?.text || 'No specific timing',
+              route: instruction.route?.coding?.[0]?.display || 'Unspecified route',
+              doseQuantity: instruction.doseAndRate?.[0]?.doseQuantity?.value + ' ' + 
+                            instruction.doseAndRate?.[0]?.doseQuantity?.unit || 'Unspecified dose'
+            })) || ['No dosage instructions provided']
+          };
+        });
+      res.json(medications);
+    } else {
+      throw new Error('Unexpected response format');
+    }
   } catch (error) {
-    console.error('Error fetching medications:', error.response?.data || error.message);
-    console.error('Error status:', error.response?.status);
-    console.error('Error headers:', error.response?.headers);
+    console.error('Error fetching medications:', error);
     res.status(error.response?.status || 500).json({
       error: 'Failed to fetch medications',
-      details: error.response?.data || error.message
+      details: error.message
     });
   }
 });
+
+// utility function to get 'display' text from json objects
+function extractDisplays(obj) {
+  const displays = {};
+  JSON.stringify(obj, (key, value) => {
+    if (key === 'display' && typeof value === 'string') {
+      const parentKey = this?.coding ? this.system : key;
+      displays[parentKey] = value;
+    }
+    return value;
+  });
+  return displays;
+}
 
 // Lab Results Endpoint
 app.get('/api/labs', async (req, res) => {
@@ -268,17 +303,37 @@ app.get('/api/labs', async (req, res) => {
       }
     });
 
+    console.log ("in server endpoint GET labs: ", response.data);
     const labResults = response.data.entry.map(entry => {
       const resource = entry.resource;
-      return {
+      const displays = extractDisplays(resource);
+
+     return {
+        id: resource.id,
         name: resource.code?.text || 'Unknown Test',
-        value: resource.valueQuantity ? `${resource.valueQuantity.value} ${resource.valueQuantity.unit}` : 'N/A',
+        value: resource.valueQuantity 
+          ? `${resource.valueQuantity.value} ${resource.valueQuantity.unit}` 
+          : 'N/A',
         status: resource.status,
-        effectiveDateTime: resource.effectiveDateTime
+        effectiveDateTime: resource.effectiveDateTime,
+        issued: resource.issued,
+        category: resource.category?.map(cat => cat.text).join(', ') || 'N/A',
+        categoryDisplays: resource.category?.map(cat => extractDisplays(cat)),
+        performer: resource.performer?.map(perf => perf.display).join(', ') || 'N/A',
+        subject: resource.subject?.display || 'N/A',
+        encounter: resource.encounter?.display || 'N/A',
+        referenceRange: resource.referenceRange?.[0]?.text || 'N/A',
+        codeDisplays: displays,
+        basedOn: resource.basedOn?.map(item => ({ reference: item.reference, display: item.display })),
+        specimen: resource.specimen?.display || 'N/A'
       };
     });
 
-    res.json(labResults);
+    res.json({
+      total: response.data.total,
+      link: response.data.link,
+      results: labResults
+    });
   } catch (error) {
     console.error('Error fetching lab results:', error.response?.data || error.message);
     console.error('Error status:', error.response?.status);
@@ -311,17 +366,49 @@ app.get('/api/vitals', async (req, res) => {
       }
     });
 
+    console.log ("in server Vitals: ", response.data);
+
     const vitalSigns = response.data.entry.map(entry => {
       const resource = entry.resource;
-      return {
-        name: resource.code?.text || 'Unknown Vital Sign',
-        value: resource.valueQuantity ? `${resource.valueQuantity.value} ${resource.valueQuantity.unit}` : 'N/A',
+      let result = {
+        id: resource.id,
         status: resource.status,
-        effectiveDateTime: resource.effectiveDateTime
+        category: resource.category?.[0]?.text || 'Unknown Category',
+        code: resource.code?.text || 'Unknown Vital Sign',
+        subject: resource.subject?.display || 'Unknown Patient',
+        effectiveDateTime: resource.effectiveDateTime,
+        issued: resource.issued,
+        performer: resource.performer?.[0]?.display || 'Unknown Performer'
       };
+
+      if (resource.valueQuantity) {
+        result.value = resource.valueQuantity.value;
+        result.unit = resource.valueQuantity.unit;
+      } else if (resource.component) {
+        result.components = resource.component.map(comp => ({
+          name: comp.code?.text || 'Unknown Component',
+          value: comp.valueQuantity?.value,
+          unit: comp.valueQuantity?.unit
+        }));
+      }
+
+      if (resource.referenceRange && resource.referenceRange.length > 0) {
+        result.referenceRange = {
+          low: resource.referenceRange[0].low?.value,
+          high: resource.referenceRange[0].high?.value,
+          unit: resource.referenceRange[0].low?.unit || resource.referenceRange[0].high?.unit,
+          text: resource.referenceRange[0].text
+        };
+      }
+
+      return result;
     });
 
-    res.json(vitalSigns);
+    res.json({
+      total: response.data.total,
+      link: response.data.link,
+      vitalSigns: vitalSigns
+    });
   } catch (error) {
     console.error('Error fetching vital signs:', error.response?.data || error.message);
     console.error('Error status:', error.response?.status);
