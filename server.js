@@ -289,6 +289,11 @@ app.get('/api/labs', async (req, res) => {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
+  // Extract pagination parameters from the request
+  const page = parseInt(req.query._page) || 1;
+  const count = parseInt(req.query._count) || 100;
+  const offset = (page - 1) * count;
+
   try {
     const response = await axios.get(`${EPIC_FHIR_BASE_URL}/Observation`, {
       headers: {
@@ -299,21 +304,21 @@ app.get('/api/labs', async (req, res) => {
         patient: req.session.tokens.patient,
         category: 'laboratory',
         _sort: '-date',
-        _count: 100
+        _count: count,
+        _offset: offset,
+        ...req.query // Pass through any additional query parameters
       }
     });
 
-    console.log ("in server endpoint GET labs: ", response.data);
     const labResults = response.data.entry.map(entry => {
       const resource = entry.resource;
       const displays = extractDisplays(resource);
-
-     return {
+      return {
         id: resource.id,
         name: resource.code?.text || 'Unknown Test',
-        value: resource.valueQuantity 
-          ? `${resource.valueQuantity.value} ${resource.valueQuantity.unit}` 
-          : 'N/A',
+        value: resource.valueQuantity
+           ? `${resource.valueQuantity.value} ${resource.valueQuantity.unit}`
+           : 'N/A',
         status: resource.status,
         effectiveDateTime: resource.effectiveDateTime,
         issued: resource.issued,
@@ -329,9 +334,21 @@ app.get('/api/labs', async (req, res) => {
       };
     });
 
+    // Construct pagination information
+    const totalPages = Math.ceil(response.data.total / count);
+    const paginationLinks = {
+      first: `/api/labs?_page=1&_count=${count}`,
+      last: `/api/labs?_page=${totalPages}&_count=${count}`,
+      next: page < totalPages ? `/api/labs?_page=${page + 1}&_count=${count}` : null,
+      prev: page > 1 ? `/api/labs?_page=${page - 1}&_count=${count}` : null
+    };
+
     res.json({
       total: response.data.total,
-      link: response.data.link,
+      page: page,
+      pageSize: count,
+      totalPages: totalPages,
+      links: paginationLinks,
       results: labResults
     });
   } catch (error) {
@@ -344,13 +361,17 @@ app.get('/api/labs', async (req, res) => {
     });
   }
 });
-
 // Vital Signs Endpoint
 app.get('/api/vitals', async (req, res) => {
   if (!req.session || !req.session.tokens || !req.session.tokens.access_token) {
     console.log('No valid session or access token found');
     return res.status(401).json({ error: 'Not authenticated' });
   }
+
+  // Extract pagination parameters from the request
+  const page = parseInt(req.query._page) || 1;
+  const count = 30; // Fixed count of 30 items per page
+  const offset = (page - 1) * count;
 
   try {
     const response = await axios.get(`${EPIC_FHIR_BASE_URL}/Observation`, {
@@ -362,11 +383,11 @@ app.get('/api/vitals', async (req, res) => {
         patient: req.session.tokens.patient,
         category: 'vital-signs',
         _sort: '-date',
-        _count: 100
+        _count: count,
+        _offset: offset,
+        ...req.query // Pass through any additional query parameters
       }
     });
-
-    console.log ("in server Vitals: ", response.data);
 
     const vitalSigns = response.data.entry.map(entry => {
       const resource = entry.resource;
@@ -404,11 +425,24 @@ app.get('/api/vitals', async (req, res) => {
       return result;
     });
 
+    // Construct pagination information
+    const totalPages = Math.ceil(response.data.total / count);
+    const paginationLinks = {
+      first: `/api/vitals?_page=1`,
+      last: `/api/vitals?_page=${totalPages}`,
+      next: page < totalPages ? `/api/vitals?_page=${page + 1}` : null,
+      prev: page > 1 ? `/api/vitals?_page=${page - 1}` : null
+    };
+
     res.json({
       total: response.data.total,
-      link: response.data.link,
+      page: page,
+      pageSize: count,
+      totalPages: totalPages,
+      links: paginationLinks,
       vitalSigns: vitalSigns
     });
+    console.log('response:', res);
   } catch (error) {
     console.error('Error fetching vital signs:', error.response?.data || error.message);
     console.error('Error status:', error.response?.status);
@@ -419,7 +453,6 @@ app.get('/api/vitals', async (req, res) => {
     });
   }
 });
-
 app.get('/api/patient-info', async (req, res) => {
   if (!req.session || !req.session.tokens || !req.session.tokens.access_token) {
     console.log('No valid session or access token found');

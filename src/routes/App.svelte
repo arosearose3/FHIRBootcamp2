@@ -22,21 +22,15 @@
     });
 
     try {
-      //console.log ( 'in try block of onMount App.svelte');
-    
-       let sessionResponse = await fetch('http://localhost:3000/auth/check-session', {
+      let sessionResponse = await fetch('http://localhost:3000/auth/check-session', {
         method: 'GET',
         credentials: 'include'
       })
-     // console.log ('in App.svelte, sessionResponse:', sessionResponse);
-
       const data = await sessionResponse.json();
-    //  console.log ('in App.svelte, data:', data);
       isLoggedIn = data.active;
     } catch (error) {
       console.error('Error checking session:', error);
     }
-
   });
 
   function generateCodeVerifier() {
@@ -63,9 +57,8 @@
     } catch (error) {
       console.error('Error logging out:', error);
     }
-   }
-
-
+  }
+  
   async function handleConnectClick() {
     isLoading = true;
     error = null;
@@ -73,17 +66,17 @@
     try {
       const state = uuidv4();
       
-      const codeVerifier = generateCodeVerifier(); // Your function to generate a code verifier
-      const codeChallenge = await generateCodeChallenge(codeVerifier); // Your function to generate a code challenge
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
 
       const response = await fetch('http://localhost:3000/api/auth-url', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ state, codeChallenge }),
-     });
-     
+        },
+        body: JSON.stringify({ state, codeChallenge }),
+      });
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -97,7 +90,6 @@
       // Redirect the user to the authorization URL
       console.log ('authUrl', authUrl);
       window.location.href = authUrl;
-
     } catch (e) {
       console.error('Error initiating authorization process:', e);
       error = `Failed to initiate authorization process: ${e.message}`;
@@ -118,12 +110,11 @@
   <nav>
     {#if !isLoggedIn}
       <button on:click={handleConnectClick} disabled={isLoading}>
-        {#if isLoading}
-          Connecting...
-        {:else}
-          Connect To Epic
-        {/if}
+        Connect To Epic
       </button>
+      {#if isLoading}
+        <div class="spinner"></div>
+      {/if}
     {/if}
   </nav>
 
@@ -132,11 +123,10 @@
   {/if}
 
   {#if isLoggedIn}
-  
-  <br>
-  <button on:click={handleLogOutClick}>
-    Log Out
-  </button><br><br>
+    <br>
+    <button on:click={handleLogOutClick}>
+      Log Out
+    </button><br><br>
     <PatientBanner />
     <Medications />
     <Labs />
@@ -145,5 +135,24 @@
 </main>
 
 <style>
-  /* ... (styles remain unchanged) ... */
+  /* ... (existing styles remain unchanged) ... */
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  button {
+    margin-right: 10px;
+  }
 </style>

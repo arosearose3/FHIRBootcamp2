@@ -1,25 +1,56 @@
 <script>
   import { onMount } from 'svelte';
 
-  let labData = { total: 0, link: [], results: [] };
+  let labData = { total: 0, results: [], page: 1, pageSize: 100, totalPages: 1, links: {} };
+  let loading = false;
+  let error = null;
 
-  onMount(async () => {
+  async function fetchLabs(url = 'http://localhost:3000/api/labs') {
+    loading = true;
     try {
-      const response = await fetch('http://localhost:3000/api/labs', {
+      const response = await fetch(url, {
         method: 'GET',
         credentials: 'include'
       });
-      labData = await response.json();
-    } catch (error) {
-      console.error('Error fetching labs:', error);
+      if (!response.ok) {
+        throw new Error('Failed to fetch lab results');
+      }
+      const newData = await response.json();
+      
+      // If it's the first page, replace the data; otherwise, append
+      if (newData.page === 1) {
+        labData = newData;
+      } else {
+        labData = {
+          ...newData,
+          results: [...labData.results, ...newData.results]
+        };
+      }
+    } catch (err) {
+      console.error('Error fetching labs:', err);
+      error = err.message;
+    } finally {
+      loading = false;
     }
+  }
+
+  function loadMore() {
+    if (labData.links.next) {
+      fetchLabs(labData.links.next);
+    }
+  }
+
+  onMount(() => {
+    fetchLabs();
   });
 </script>
 
 <div class="lab-results">
   <h2>Lab Results</h2>
-  {#if labData.results.length > 0}
-    <p>Total results: {labData.total}</p>
+  {#if error}
+    <p class="error">{error}</p>
+  {:else if labData.results.length > 0}
+    <p>Showing {labData.results.length} of {labData.total} results</p>
     {#each labData.results as lab}
       <div class="lab-item">
         <h3>{lab.name}</h3>
@@ -64,6 +95,14 @@
         {/if}
       </div>
     {/each}
+    {#if labData.links.next}
+      <button on:click={loadMore} disabled={loading}>
+        {loading ? 'Loading...' : 'Load More'}
+      </button>
+    {/if}
+    <p>Page {labData.page} of {labData.totalPages}</p>
+  {:else if loading}
+    <p>Loading lab results...</p>
   {:else}
     <p>No lab results found.</p>
   {/if}
@@ -86,5 +125,23 @@
   }
   ul {
     padding-left: 20px;
+  }
+  .error {
+    color: red;
+    font-weight: bold;
+  }
+  button {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
   }
 </style>

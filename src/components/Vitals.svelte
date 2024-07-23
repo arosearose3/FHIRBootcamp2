@@ -1,66 +1,67 @@
 <script>
+  import Accordion from './Accordian3.svelte';
   import { onMount } from 'svelte';
 
-  let vitalData = { total: 0, link: [], vitalSigns: [] };
+  let vitalData = { total: 0, vitalSigns: [], page: 1, pageSize: 30, totalPages: 1, links: {} };
+  let error = null;
+  let loading = false;
 
-  onMount(async () => {
+  async function fetchVitals(url = 'http://localhost:3000/api/vitals') {
+    loading = true;
     try {
-      const response = await fetch('http://localhost:3000/api/vitals', {
+      const response = await fetch(url, {
         method: 'GET',
         credentials: 'include'
       });
-      vitalData = await response.json();
-    } catch (error) {
-      console.error('Error fetching vitals:', error);
+      if (!response.ok) {
+        throw new Error('Failed to fetch vital signs');
+      }
+      const newData = await response.json();
+      console.log ("in Vitals, newData:", newData);
+      
+      // If it's the first page, replace the data; otherwise, append
+      if (newData.page === 1) {
+        vitalData = newData;
+      } else {
+        vitalData = {
+          ...newData,
+          vitalSigns: [...vitalData.vitalSigns, ...newData.vitalSigns]
+        };
+      }
+    } catch (err) {
+      console.error('Error fetching vitals:', err);
+      error = 'Failed to fetch vital signs data.';
+    } finally {
+      loading = false;
     }
-  });
-
-  function formatDate(dateString) {
-    return new Date(dateString).toLocaleString();
   }
+
+  function loadMore() {
+    if (vitalData.links.next) {
+      fetchVitals(vitalData.links.next);
+    }
+  }
+
+  onMount(() => {
+    fetchVitals();
+  });
 </script>
 
 <div class="vital-signs">
   <h2>Vital Signs</h2>
-  {#if vitalData.vitalSigns.length > 0}
-    <p>Total results: {vitalData.total}</p>
-    {#each vitalData.vitalSigns as vital}
-      <div class="vital-item">
-        <h3>{vital.code}</h3>
-        <ul>
-          <li><strong>ID:</strong> {vital.id}</li>
-          <li><strong>Status:</strong> {vital.status}</li>
-          <li><strong>Category:</strong> {vital.category}</li>
-          <li><strong>Subject:</strong> {vital.subject}</li>
-          <li><strong>Effective Date/Time:</strong> {formatDate(vital.effectiveDateTime)}</li>
-          <li><strong>Issued:</strong> {formatDate(vital.issued)}</li>
-          <li><strong>Performer:</strong> {vital.performer}</li>
-          {#if vital.value !== undefined}
-            <li><strong>Value:</strong> {vital.value} {vital.unit}</li>
-          {/if}
-          {#if vital.components}
-            <li>
-              <strong>Components:</strong>
-              <ul>
-                {#each vital.components as component}
-                  <li>{component.name}: {component.value} {component.unit}</li>
-                {/each}
-              </ul>
-            </li>
-          {/if}
-          {#if vital.referenceRange}
-            <li>
-              <strong>Reference Range:</strong>
-              {#if vital.referenceRange.low !== undefined && vital.referenceRange.high !== undefined}
-                {vital.referenceRange.low} - {vital.referenceRange.high} {vital.referenceRange.unit}
-              {:else}
-                {vital.referenceRange.text}
-              {/if}
-            </li>
-          {/if}
-        </ul>
-      </div>
-    {/each}
+  {#if error}
+    <p class="error">{error}</p>
+  {:else if vitalData.vitalSigns.length > 0}
+    <p>Showing {vitalData.vitalSigns.length} of {vitalData.total} results</p>
+    <Accordion {vitalData} />
+    {#if vitalData.links.next}
+      <button on:click={loadMore} disabled={loading}>
+        {loading ? 'Loading...' : 'Load More'}
+      </button>
+    {/if}
+    <p>Page {vitalData.page} of {vitalData.totalPages}</p>
+  {:else if loading}
+    <p>Loading vital signs...</p>
   {:else}
     <p>No vital signs found.</p>
   {/if}
@@ -72,16 +73,25 @@
     max-width: 800px;
     margin: 0 auto;
   }
-  .vital-item {
-    border: 1px solid #ccc;
-    padding: 15px;
-    margin-bottom: 20px;
-    border-radius: 5px;
-  }
-  h3 {
-    margin-top: 0;
-  }
-  ul {
+  :global(.vital-signs ul) {
     padding-left: 20px;
+  }
+  .error {
+    color: red;
+    font-weight: bold;
+  }
+  button {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
   }
 </style>
