@@ -56,7 +56,7 @@
   {:else if vitalData.vitalSigns.length > 0}
     <p>Showing {vitalData.vitalSigns.length} of {vitalData.total+1} results</p>
     <Accordion {vitalData} />
-    <!-- <VitalsGraph vitalsData={vitalData.vitalSigns} /> -->
+    <br><br><VitalsGraph vitalsData={vitalData.vitalSigns} /><br><br>
     {#if vitalData.links.next}
       <button on:click={loadMore} disabled={loading}>
         {loading ? 'Loading...' : 'Load More'}

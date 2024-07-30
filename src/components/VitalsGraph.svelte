@@ -7,6 +7,7 @@
 
   let chartOptions = {};
   let series = [];
+  let seriesStr = '';
   let chartReady = false;
 
   onMount(async () => {
@@ -76,6 +77,7 @@
 </script>
 
 <div class="vitals-graph">
+  
   {#if browser && chartReady && series.length > 0 && series[0].data.length > 0}
     <ApexChart options={chartOptions} {series} />
   {:else}

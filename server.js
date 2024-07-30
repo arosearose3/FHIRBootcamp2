@@ -239,7 +239,7 @@ app.get('/api/medications', async (req, res) => {
       query: {
         patient: req.session.tokens.patient,
         _sort: '-date',
-        _count: 100,
+        _count: 1000,
         status: 'active'
       }
     });
@@ -371,7 +371,7 @@ app.get('/api/vitals', async (req, res) => {
 
   // Extract pagination parameters from the request
   const page = parseInt(req.query._page) || 1;
-  const count = 30; // Fixed count of 30 items per page
+  const count = 300; // Fixed count of 30 items per page
   const offset = (page - 1) * count;
 
   try {
