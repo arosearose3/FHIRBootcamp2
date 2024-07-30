@@ -44,6 +44,16 @@ function generateCodeVerifier() {
     return crypto.createHash('sha256').update(verifier).digest('base64url');
   }
 
+  const handleAxiosError = (error, res) => {
+    console.error('Error:', error.message);
+    const status = error.response?.status || 500;
+    const errorMessage = error.response?.data?.error || error.message;
+    res.status(status).json({
+      error: `Request failed with status ${status}`,
+      details: errorMessage
+    });
+  };
+  
 // exchange code for auth token, store session variables. 
 app.use(async (req, res, next) => {
     const { code, state } = req.query;
@@ -260,12 +270,8 @@ app.get('/api/medications', async (req, res) => {
     } else {
       throw new Error('Unexpected response format');
     }
-  } catch (error) {
-    console.error('Error fetching medications:', error);
-    res.status(error.response?.status || 500).json({
-      error: 'Failed to fetch medications',
-      details: error.message
-    });
+  }   catch (error) {
+    handleAxiosError(error, res);
   }
 });
 
@@ -352,15 +358,10 @@ app.get('/api/labs', async (req, res) => {
       results: labResults
     });
   } catch (error) {
-    console.error('Error fetching lab results:', error.response?.data || error.message);
-    console.error('Error status:', error.response?.status);
-    console.error('Error headers:', error.response?.headers);
-    res.status(error.response?.status || 500).json({
-      error: 'Failed to fetch lab results',
-      details: error.response?.data || error.message
-    });
+    handleAxiosError(error, res);
   }
 });
+
 // Vital Signs Endpoint
 app.get('/api/vitals', async (req, res) => {
   if (!req.session || !req.session.tokens || !req.session.tokens.access_token) {
@@ -444,15 +445,10 @@ app.get('/api/vitals', async (req, res) => {
     });
     console.log('response:', res);
   } catch (error) {
-    console.error('Error fetching vital signs:', error.response?.data || error.message);
-    console.error('Error status:', error.response?.status);
-    console.error('Error headers:', error.response?.headers);
-    res.status(error.response?.status || 500).json({
-      error: 'Failed to fetch vital signs',
-      details: error.response?.data || error.message
-    });
+    handleAxiosError(error, res);
   }
 });
+
 app.get('/api/patient-info', async (req, res) => {
   if (!req.session || !req.session.tokens || !req.session.tokens.access_token) {
     console.log('No valid session or access token found');
@@ -482,13 +478,7 @@ app.get('/api/patient-info', async (req, res) => {
 
     res.json(patientInfo);
   } catch (error) {
-    console.error('Error fetching patient info:', error.response?.data || error.message);
-    console.error('Error status:', error.response?.status);
-    console.error('Error headers:', error.response?.headers);
-    res.status(error.response?.status || 500).json({
-      error: 'Failed to fetch patient information',
-      details: error.response?.data || error.message
-    });
+    handleAxiosError(error, res);
   }
 });
 

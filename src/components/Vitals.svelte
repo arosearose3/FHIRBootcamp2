@@ -1,6 +1,8 @@
 <script>
   import Accordion from './Accordian3.svelte';
   import { onMount } from 'svelte';
+  import VitalsGraph from './VitalsGraph.svelte';
+  
 
   let vitalData = { total: 0, vitalSigns: [], page: 1, pageSize: 30, totalPages: 1, links: {} };
   let error = null;
@@ -52,8 +54,9 @@
   {#if error}
     <p class="error">{error}</p>
   {:else if vitalData.vitalSigns.length > 0}
-    <p>Showing {vitalData.vitalSigns.length} of {vitalData.total} results</p>
+    <p>Showing {vitalData.vitalSigns.length} of {vitalData.total+1} results</p>
     <Accordion {vitalData} />
+    <!-- <VitalsGraph vitalsData={vitalData.vitalSigns} /> -->
     {#if vitalData.links.next}
       <button on:click={loadMore} disabled={loading}>
         {loading ? 'Loading...' : 'Load More'}
@@ -70,8 +73,11 @@
 <style>
   .vital-signs {
     font-family: Arial, sans-serif;
-    max-width: 800px;
+    max-width: 600px;
     margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
   }
   :global(.vital-signs ul) {
     padding-left: 20px;

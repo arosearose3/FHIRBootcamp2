@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte';
+ 
+  
 
   let labData = { total: 0, results: [], page: 1, pageSize: 100, totalPages: 1, links: {} };
   let loading = false;
@@ -47,10 +49,11 @@
 
 <div class="lab-results">
   <h2>Lab Results</h2>
+
   {#if error}
     <p class="error">{error}</p>
   {:else if labData.results.length > 0}
-    <p>Showing {labData.results.length} of {labData.total} results</p>
+    <p>Showing {labData.results.length} of {labData.total+1} results</p>
     {#each labData.results as lab}
       <div class="lab-item">
         <h3>{lab.name}</h3>
@@ -111,8 +114,11 @@
 <style>
   .lab-results {
     font-family: Arial, sans-serif;
-    max-width: 800px;
+    max-width: 600px;
     margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
   }
   .lab-item {
     border: 1px solid #ccc;

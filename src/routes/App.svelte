@@ -17,19 +17,21 @@
 
   onMount(async () => {
     codeVerifier = generateCodeVerifier();
-    generateCodeChallenge(codeVerifier).then(challenge => {
-      codeChallenge = challenge;
-    });
+    codeChallenge = await generateCodeChallenge(codeVerifier);
 
     try {
-      let sessionResponse = await fetch('http://localhost:3000/auth/check-session', {
+      const sessionResponse = await fetch('http://localhost:3000/auth/check-session', {
         method: 'GET',
         credentials: 'include'
-      })
+      });
+      if (!sessionResponse.ok) {
+        throw new Error(`HTTP error! status: ${sessionResponse.status}`);
+      }
       const data = await sessionResponse.json();
       isLoggedIn = data.active;
-    } catch (error) {
-      console.error('Error checking session:', error);
+    } catch (err) {
+      console.error('Error checking session:', err);
+      error = `Failed to check session: ${err.message}`;
     }
   });
 
@@ -41,7 +43,7 @@
     const encoder = new TextEncoder();
     const data = encoder.encode(verifier);
     const digest = await window.crypto.subtle.digest('SHA-256', data);
-    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
       .replace(/=/g, '')
       .replace(/\+/g, '-')
       .replace(/\//g, '_');
@@ -49,13 +51,18 @@
 
   async function handleLogOutClick() {
     try {
-      await fetch('http://localhost:3000/auth/logout', {
+      const response = await fetch('http://localhost:3000/auth/logout', {
         method: 'POST',
         credentials: 'include',
       });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       isLoggedIn = false;
-    } catch (error) {
-      console.error('Error logging out:', error);
+      error = null;
+    } catch (err) {
+      console.error('Error logging out:', err);
+      error = `Failed to log out: ${err.message}`;
     }
   }
   
@@ -66,9 +73,6 @@
     try {
       const state = uuidv4();
       
-      const codeVerifier = generateCodeVerifier();
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-
       const response = await fetch('http://localhost:3000/api/auth-url', {
         method: 'POST',
         headers: {
@@ -78,7 +82,8 @@
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(`${errorData.error}: ${errorData.details}`);
       }
 
       const { authUrl } = await response.json();
@@ -88,23 +93,37 @@
       sessionStorage.setItem('state', state);
 
       // Redirect the user to the authorization URL
-      console.log ('authUrl', authUrl);
+      console.log('authUrl', authUrl);
       window.location.href = authUrl;
-    } catch (e) {
-      console.error('Error initiating authorization process:', e);
-      error = `Failed to initiate authorization process: ${e.message}`;
+    } catch (err) {
+      console.error('Error initiating authorization process:', err);
+      error = `Failed to initiate authorization process: ${err.message}`;
+    } finally {
       isLoading = false;
     }
   }
 
   function handleLoginSuccess() {
     isLoggedIn = true;
+    error = null;
+  }
+
+  function handleApiError(err) {
+    console.error('API Error:', err);
+    if (err.message.includes('status 503')) {
+      error = 'The server is temporarily unavailable. Please try again later.';
+    } else {
+      error = `An error occurred: ${err.message}`;
+    }
+    isLoggedIn = false;
   }
 </script>
 
 <main>
   <header>
-    <h1>Epic Integration App</h1>
+    <div class="banner">
+      <h1>Epic Integration App</h1>
+    </div>  
   </header>
   
   <nav>
@@ -115,6 +134,10 @@
       {#if isLoading}
         <div class="spinner"></div>
       {/if}
+    {:else}
+      <button on:click={handleLogOutClick}>
+        Log Out
+      </button>
     {/if}
   </nav>
 
@@ -123,19 +146,31 @@
   {/if}
 
   {#if isLoggedIn}
-    <br>
-    <button on:click={handleLogOutClick}>
-      Log Out
-    </button><br><br>
-    <PatientBanner />
-    <Medications />
-    <Labs />
-    <Vitals />
+    <PatientBanner on:error={handleApiError} />
+    <Medications on:error={handleApiError} />
+    <Labs on:error={handleApiError} />
+    <Vitals on:error={handleApiError} />
   {/if}
 </main>
 
 <style>
-  /* ... (existing styles remain unchanged) ... */
+  header {
+    font-family: Arial, sans-serif;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+
+  nav {
+    font-family: Arial, sans-serif;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
 
   .spinner {
     width: 40px;
@@ -154,5 +189,11 @@
 
   button {
     margin-right: 10px;
+  }
+
+  .error {
+    color: red;
+    font-weight: bold;
+    margin-top: 10px;
   }
 </style>

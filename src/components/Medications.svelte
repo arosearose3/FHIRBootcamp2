@@ -22,10 +22,11 @@
 </script>
 
 <div class="medications-container">
-  <h2>Medications</h2>
+  
   {#if error}
     <p class="error">Error: {error}</p>
   {:else if medications.length > 0}
+  <h2>Medications</h2><br><br>
     {#each medications as medication}
       <div class="medication-card">
         <h3>{medication.medication}</h3>
@@ -58,14 +59,20 @@
 
 <style>
   .medications-container {
-    max-width: 800px;
+    font-family: Arial, sans-serif;
+    max-width: 600px;
     margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
   }
   .medication-card {
+    font-family: Arial, sans-serif;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
     border: 1px solid #ccc;
-    border-radius: 4px;
-    padding: 1rem;
-    margin-bottom: 1rem;
+    border-radius: 5px;
   }
   .error {
     color: red;
