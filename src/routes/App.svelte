@@ -6,6 +6,7 @@
   import Medications from '../components/Medications.svelte';
   import Labs from '../components/Labs.svelte';
   import Vitals from '../components/Vitals.svelte';
+  
 
   let isLoggedIn = false;
   let isLoading = false;
@@ -128,14 +129,14 @@
   
   <nav>
     {#if !isLoggedIn}
-      <button on:click={handleConnectClick} disabled={isLoading}>
+      <button class="login-logout-btn" on:click={handleConnectClick} disabled={isLoading}>
         Connect To Epic
       </button>
       {#if isLoading}
         <div class="spinner"></div>
       {/if}
     {:else}
-      <button on:click={handleLogOutClick}>
+      <button class="login-logout-btn" on:click={handleLogOutClick}>
         Log Out
       </button>
     {/if}
@@ -191,6 +192,24 @@
     margin-right: 10px;
   }
 
+  .login-logout-btn {
+    padding: 10px 50px;
+    background-color: #d3d3d3; /* Light gray */
+    color: black;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .login-logout-btn:hover {
+    background-color: #a9a9a9; /* Dark gray */
+    color: white;
+  }
+
+  .login-logout-btn:active {
+    background-color: black;
+    color: white;
+  }
   .error {
     color: red;
     font-weight: bold;
